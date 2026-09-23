@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-from .terminal import *
+from .applet import *
+from .component import *
 from .session import *
-from .task import *
+from .virtualapp import *

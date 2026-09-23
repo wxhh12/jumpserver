@@ -1,210 +1,126 @@
-## Jumpserver 多云环境下更好用的堡垒机
+<div align="center">
+  <a name="readme-top"></a>
+  <a href="https://jumpserver.com" target="_blank"><img src="https://download.jumpserver.org/images/jumpserver-logo.svg" alt="JumpServer" width="300" /></a>
+  
+## An open-source PAM platform (Bastion Host)
 
-[![Python3](https://img.shields.io/badge/python-3.6-green.svg?style=plastic)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/django-2.1-brightgreen.svg?style=plastic)](https://www.djangoproject.com/)
-[![Ansible](https://img.shields.io/badge/ansible-2.4.2.0-blue.svg?style=plastic)](https://www.ansible.com/)
-[![Paramiko](https://img.shields.io/badge/paramiko-2.4.1-green.svg?style=plastic)](http://www.paramiko.org/)
+[![][license-shield]][license-link]
+[![][docs-shield]][docs-link]
+[![][deepwiki-shield]][deepwiki-link]
+[![][discord-shield]][discord-link]
+[![][docker-shield]][docker-link]
+[![][github-release-shield]][github-release-link]
+[![][github-stars-shield]][github-stars-link]
+
+[English](/README.md) · [中文(简体)](/readmes/README.zh-hans.md) · [中文(繁體)](/readmes/README.zh-hant.md) · [日本語](/readmes/README.ja.md) · [Português (Brasil)](/readmes/README.pt-br.md) · [Español](/readmes/README.es.md) · [Русский](/readmes/README.ru.md) · [한국어](/readmes/README.ko.md)
+
+</div>
+<br/>
+
+## What is JumpServer?
+
+JumpServer is an open-source Privileged Access Management (PAM) platform that provides DevOps and IT teams with on-demand and secure access to SSH, RDP, Kubernetes, Database and RemoteApp endpoints through a web browser.
 
 
-----
-
-Jumpserver 是全球首款完全开源的堡垒机，使用 GNU GPL v2.0 开源协议，是符合 4A 的专业运维审计系统。
-
-Jumpserver 使用 Python / Django 进行开发，遵循 Web 2.0 规范，配备了业界领先的 Web Terminal 解决方案，交互界面美观、用户体验好。
-
-Jumpserver 采纳分布式架构，支持多机房跨区域部署，中心节点提供 API，各机房部署登录节点，可横向扩展、无并发限制。
-
-改变世界，从一点点开始。
-
-- [English Version](https://github.com/jumpserver/jumpserver/blob/master/README_EN.md)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="https://www.jumpserver.com/images/jumpserver-arch-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://www.jumpserver.com/images/jumpserver-arch-dark.png">
+  <img src="https://github.com/user-attachments/assets/dd612f3d-c958-4f84-b164-f31b75454d7f" alt="Theme-based Image">
+</picture>
 
 
-### 功能
-----
+## Quickstart
 
-<table class="subscription-level-table">
-    <tr class="subscription-level-tr-border">
-        <th  style="background-color: #1ab394;color: #ffffff;" colspan="3">Jumpserver提供的堡垒机必备功能</th>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-first-td-background-style" rowspan="4">身份验证 Authentication</td>
-        <td class="features-second-td-background-style" rowspan="3" >登录认证
-        </td>
-        <td class="features-third-td-background-style">资源统一登录和认证
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">LDAP认证
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">支持OpenID，实现单点登录
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">多因子认证
-        </td>
-        <td class="features-third-td-background-style">MFA（Google Authenticator）
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-first-td-background-style" rowspan="9">账号管理 Account</td>
-        <td class="features-second-td-background-style" rowspan="2">集中账号管理
-        </td>
-        <td class="features-third-td-background-style">管理用户管理
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">系统用户管理
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style" rowspan="4">统一密码管理
-        </td>
-        <td class="features-third-td-background-style">资产密码托管
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">自动生成密码
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">密码自动推送
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">密码过期设置
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-outline-td-background-style" rowspan="2">批量密码变更(X-PACK)
-        </td>
-        <td class="features-outline-td-background-style">定期批量修改密码
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-outline-td-background-style">生成随机密码
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-outline-td-background-style">多云环境的资产纳管(X-PACK)
-        </td>
-        <td class="features-outline-td-background-style">对私有云、公有云资产统一纳管
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-first-td-background-style" rowspan="8">授权控制 Authorization</td>
-        <td class="features-second-td-background-style" rowspan="3">资产授权管理
-        </td>
-        <td class="features-third-td-background-style">资产树
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">资产或资产组灵活授权
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">节点内资产自动继承授权
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-outline-td-background-style">组织管理(X-PACK)
-        </td>
-        <td class="features-outline-td-background-style">实现多租户管理，权限隔离
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">多维度授权
-        </td>
-        <td class="features-third-td-background-style">可对用户、用户组或系统角色授权
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">指令限制
-        </td>
-        <td class="features-third-td-background-style">限制特权指令使用，支持黑白名单
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">统一文件传输
-        </td>
-        <td class="features-third-td-background-style">SFTP 文件上传/下载
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">文件管理
-        </td>
-        <td class="features-third-td-background-style">Web SFTP 文件管理
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-first-td-background-style" rowspan="6">安全审计 Audit</td>
-        <td class="features-second-td-background-style" rowspan="2">会话管理
-        </td>
-        <td class="features-third-td-background-style">在线会话管理
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">历史会话管理
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style" rowspan="2">录像管理
-        </td>
-        <td class="features-third-td-background-style">Linux 录像支持
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-third-td-background-style">Windows 录像支持
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">指令审计
-        </td>
-        <td class="features-third-td-background-style">指令记录
-        </td>
-    </tr>
-    <tr class="subscription-level-tr-border">
-        <td class="features-second-td-background-style">文件传输审计
-        </td>
-        <td class="features-third-td-background-style">上传/下载记录审计
-        </td>
-    </tr>
+Prepare a clean Linux Server ( 64 bit, >= 4c8g )
+
+```sh
+curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | bash
+```
+
+Access JumpServer in your browser at `http://your-jumpserver-ip/`
+- Username: `admin`
+- Password: `ChangeMe`
+
+[![JumpServer Quickstart](https://github.com/user-attachments/assets/0f32f52b-9935-485e-8534-336c63389612)](https://www.youtube.com/watch?v=UlGYRbKrpgY "JumpServer Quickstart")
+
+## Screenshots
+<table style="border-collapse: collapse; border: 1px solid black;">
+  <tr>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/99fabe5b-0475-4a53-9116-4c370a1426c4" alt="JumpServer Console"   /></td>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/user-attachments/assets/7c1f81af-37e8-4f07-8ac9-182895e1062e" alt="JumpServer PAM"   /></td>    
+  </tr>
+  <tr>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/a424d731-1c70-4108-a7d8-5bbf387dda9a" alt="JumpServer Audits"   /></td>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/393d2c27-a2d0-4dea-882d-00ed509e00c9" alt="JumpServer Workbench"   /></td>
+  </tr>
+  <tr>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/user-attachments/assets/eaa41f66-8cc8-4f01-a001-0d258501f1c9" alt="JumpServer RBAC"   /></td>     
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/3a2611cd-8902-49b8-b82b-2a6dac851f3e" alt="JumpServer Settings"   /></td>
+  </tr>
+  <tr>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/1e236093-31f7-4563-8eb1-e36d865f1568" alt="JumpServer SSH"   /></td>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/69373a82-f7ab-41e8-b763-bbad2ba52167" alt="JumpServer RDP"   /></td>
+  </tr>
+  <tr>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/5bed98c6-cbe8-4073-9597-d53c69dc3957" alt="JumpServer K8s"   /></td>
+    <td style="padding: 5px;background-color:#fff;"><img src= "https://github.com/jumpserver/jumpserver/assets/32935519/b80ad654-548f-42bc-ba3d-c1cfdf1b46d6" alt="JumpServer DB"   /></td>
+  </tr>
 </table>
 
+## Components
 
-### 开始使用
-----
+JumpServer consists of multiple key components, which collectively form the functional framework of JumpServer, providing users with comprehensive capabilities for operations management and security control.
 
-- 快速开始文档  [Docker 安装](http://docs.jumpserver.org/zh/docs/dockerinstall.html)
+| Project                                                | Status                                                                                                                                                                 | Description                                                                                             |
+|--------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| [Lina](https://github.com/jumpserver/lina)             | <a href="https://github.com/jumpserver/lina/releases"><img alt="Lina release" src="https://img.shields.io/github/release/jumpserver/lina.svg" /></a>                   | JumpServer Web UI                                                                                       |
+| [Luna](https://github.com/jumpserver/luna)             | <a href="https://github.com/jumpserver/luna/releases"><img alt="Luna release" src="https://img.shields.io/github/release/jumpserver/luna.svg" /></a>                   | JumpServer Web Terminal                                                                                 |
+| [KoKo](https://github.com/jumpserver/koko)             | <a href="https://github.com/jumpserver/koko/releases"><img alt="Koko release" src="https://img.shields.io/github/release/jumpserver/koko.svg" /></a>                   | JumpServer Character Protocol Connector                                                                 |
+| [Lion](https://github.com/jumpserver/lion)             | <a href="https://github.com/jumpserver/lion/releases"><img alt="Lion release" src="https://img.shields.io/github/release/jumpserver/lion.svg" /></a>                   | JumpServer Graphical Protocol Connector                                                                 |
+| [Chen](https://github.com/jumpserver/chen)             | <a href="https://github.com/jumpserver/chen/releases"><img alt="Chen release" src="https://img.shields.io/github/release/jumpserver/chen.svg" />                       | JumpServer Web DB 
+| [Client](https://github.com/jumpserver/clients)             | <a href="https://github.com/jumpserver/clients/releases"><img alt="Clients release" src="https://img.shields.io/github/release/jumpserver/clients.svg" />                       | JumpServer Client     |  
+| [Tinker](https://github.com/jumpserver/tinker)         | <img alt="Tinker" src="https://img.shields.io/badge/release-private-red" />                                                                                            | JumpServer Remote Application Connector (Windows)                                                    |
+| [Panda](https://github.com/jumpserver/Panda)           | <img alt="Panda" src="https://img.shields.io/badge/release-private-red" />                                                                                             | JumpServer EE Remote Application Connector (Linux)                                                      |
+| [Razor](https://github.com/jumpserver/razor)           | <img alt="Chen" src="https://img.shields.io/badge/release-private-red" />                                                                                              | JumpServer EE RDP Proxy Connector                                                                       |
+| [Magnus](https://github.com/jumpserver/magnus)         | <img alt="Magnus" src="https://img.shields.io/badge/release-private-red" />                                                                                            | JumpServer EE Database Proxy Connector                                                                  |
+| [Nec](https://github.com/jumpserver/nec)               | <img alt="Nec" src="https://img.shields.io/badge/release-private-red" />                                                                                               | JumpServer EE VNC Proxy Connector                                                                       |
+| [Facelive](https://github.com/jumpserver/facelive)     | <img alt="Facelive" src="https://img.shields.io/badge/release-private-red" />                                                                                          | JumpServer EE Facial Recognition                                                                        |
 
-- Step by Step 安装文档 [详细部署](http://docs.jumpserver.org/zh/docs/step_by_step.html)
+## Third-party projects 
+- [jumpserver-grafana-dashboard](https://github.com/acerrah/jumpserver-grafana-dashboard)   JumpServer with grafana dashboard
 
-- 也可以查看我们完整文档 [文档](http://docs.jumpserver.org)
+## Contributing
 
-### Demo、视频 和 截图
-----
+Welcome to submit PR to contribute. Please refer to [CONTRIBUTING.md][contributing-link] for guidelines.
 
-我们提供了 Demo 、演示视频和截图可以让你快速了解 Jumpserver
+## License
 
-- [Demo](https://demo.jumpserver.org/auth/login/?next=/)
-- [视频](https://fit2cloud2-offline-installer.oss-cn-beijing.aliyuncs.com/tools/Jumpserver%20%E4%BB%8B%E7%BB%8Dv1.4.mp4)
-- [截图](http://docs.jumpserver.org/zh/docs/snapshot.html)
+Copyright (c) 2014-2026 FIT2CLOUD, All rights reserved.
 
-### SDK
-----
+Licensed under The GNU General Public License version 3 (GPLv3) (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 
-我们还编写了一些SDK，供你的其它系统快速和 Jumpserver API 交互
+https://www.gnu.org/licenses/gpl-3.0.html
 
-- [Python](https://github.com/jumpserver/jumpserver-python-sdk) Jumpserver其它组件使用这个SDK完成交互
-- [Java](https://github.com/KaiJunYan/jumpserver-java-sdk.git) 恺珺同学提供的Java版本的SDK
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an " AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
+<!-- JumpServer official link -->
+[docs-link]: https://jumpserver.com/docs
+[discord-link]: https://discord.com/invite/W6vYXmAQG2
+[deepwiki-link]: https://deepwiki.com/jumpserver/jumpserver/
+[contributing-link]: https://github.com/jumpserver/jumpserver/blob/dev/CONTRIBUTING.md
 
-### License & Copyright
-Copyright (c) 2014-2019 飞致云 FIT2CLOUD, All rights reserved.
+<!-- JumpServer Other link-->
+[license-link]: https://www.gnu.org/licenses/gpl-3.0.html
+[docker-link]: https://hub.docker.com/u/jumpserver
+[github-release-link]: https://github.com/jumpserver/jumpserver/releases/latest
+[github-stars-link]: https://github.com/jumpserver/jumpserver
+[github-issues-link]: https://github.com/jumpserver/jumpserver/issues
 
-Licensed under The GNU General Public License version 2 (GPLv2)  (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
-
-https://www.gnu.org/licenses/gpl-2.0.html
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+<!-- Shield link-->
+[docs-shield]: https://img.shields.io/badge/documentation-148F76
+[github-release-shield]: https://img.shields.io/github/v/release/jumpserver/jumpserver
+[github-stars-shield]: https://img.shields.io/github/stars/jumpserver/jumpserver?color=%231890FF&style=flat-square   
+[docker-shield]: https://img.shields.io/docker/pulls/jumpserver/jms_all.svg
+[license-shield]: https://img.shields.io/github/license/jumpserver/jumpserver
+[deepwiki-shield]: https://img.shields.io/badge/deepwiki-devin?color=blue
+[discord-shield]: https://img.shields.io/discord/1194233267294052363?style=flat&logo=discord&logoColor=%23f5f5f5&labelColor=%235462eb&color=%235462eb

@@ -1,17 +1,30 @@
 # -*- coding: utf-8 -*-
 #
-import re
-from collections import OrderedDict
-from itertools import chain
-import logging
 import datetime
-import uuid
-from functools import wraps
-import copy
 import ipaddress
+import logging
+import os
+import platform
+import re
+import socket
+import textwrap
+import time
+import uuid
+import hmac
+import hashlib
+from collections import OrderedDict
+from functools import wraps, cached_property
+from itertools import chain
 
+from bs4 import BeautifulSoup
+from markdownify import markdownify
+import psutil
+from django.conf import settings
+from django.templatetags.static import static
 
-UUID_PATTERN = re.compile(r'[0-9a-zA-Z\-]{36}')
+from common.permissions import ServiceAccountSignaturePermission
+
+UUID_PATTERN = re.compile(r'\w{8}(-\w{4}){3}-\w{12}')
 ipip_db = None
 
 
@@ -26,8 +39,14 @@ def combine_seq(s1, s2, callback=None):
     return seq
 
 
-def get_logger(name=None):
+def get_logger(name=''):
+    if '/' in name:
+        name = os.path.basename(name).replace('.py', '')
     return logging.getLogger('jumpserver.%s' % name)
+
+
+def get_syslogger(name=''):
+    return logging.getLogger('syslog.%s' % name)
 
 
 def timesince(dt, since='', default="just now"):
@@ -36,7 +55,7 @@ def timesince(dt, since='', default="just now"):
     3 days, 5 hours.
     """
 
-    if since is '':
+    if not since:
         since = datetime.datetime.utcnow()
 
     if since is None:
@@ -64,6 +83,7 @@ def setattr_bulk(seq, key, value):
     def set_attr(obj):
         setattr(obj, key, value)
         return obj
+
     return map(set_attr, seq)
 
 
@@ -85,12 +105,12 @@ def capacity_convert(size, expect='auto', rate=1000):
     rate_mapping = (
         ('K', rate),
         ('KB', rate),
-        ('M', rate**2),
-        ('MB', rate**2),
-        ('G', rate**3),
-        ('GB', rate**3),
-        ('T', rate**4),
-        ('TB', rate**4),
+        ('M', rate ** 2),
+        ('MB', rate ** 2),
+        ('G', rate ** 3),
+        ('GB', rate ** 3),
+        ('T', rate ** 4),
+        ('TB', rate ** 4),
     )
 
     rate_mapping = OrderedDict(rate_mapping)
@@ -105,7 +125,7 @@ def capacity_convert(size, expect='auto', rate=1000):
 
     if expect == 'auto':
         for unit, rate_ in rate_mapping.items():
-            if rate > std_size/rate_ > 1:
+            if rate > std_size / rate_ >= 1 or unit == "T":
                 expect = unit
                 break
 
@@ -130,26 +150,81 @@ def get_short_uuid_str():
 
 
 def is_uuid(seq):
-    if isinstance(seq, str):
-        if UUID_PATTERN.match(seq):
-            return True
-        else:
-            return False
-    else:
-        for s in seq:
-            if not is_uuid(s):
-                return False
+    if isinstance(seq, uuid.UUID):
         return True
+    elif isinstance(seq, str) and UUID_PATTERN.match(seq):
+        return True
+    elif isinstance(seq, (list, tuple)):
+        return all([is_uuid(x) for x in seq])
+    return False
 
 
 def get_request_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')
+    if settings.TRUSTED_IP_VERIFY_ENABLED:
+        login_ip = get_trusted_request_ip(request)
+    else:
+        login_ip = get_common_request_ip(request)
+    return login_ip
 
+
+def get_trusted_request_ip(request):
+    trusted_ip = request.headers.get(settings.TRUSTED_IP_SOURCE_HEADER, '')
+    if not trusted_ip:
+        logger.warning(
+            f"Trusted IP verification enabled but no source header '{settings.TRUSTED_IP_SOURCE_HEADER}' "
+            f"found in request."
+        )
+        return '0.0.0.0'
+
+    signature_header_name = settings.TRUSTED_IP_SIGN_HEADER
+    received_signature = request.headers.get(signature_header_name, '')
+    if not received_signature:
+        logger.warning(
+            f"Trusted IP verification enabled but no signature header '{signature_header_name}' "
+            f"found in request."
+        )
+        return '0.0.0.0'
+
+    sign_key = settings.TRUSTED_IP_SIGN_KEY or os.environ.get('HMAC_SIGN_KEY', '')
+    expected_signature = hmac.new(
+        sign_key.encode(), trusted_ip.encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_signature.lower(), received_signature.lower()):
+        logger.warning(
+            f"Trusted IP verification failed. Expected signature: {expected_signature}, "
+            f"Received signature: {received_signature}."
+        )
+        return '0.0.0.0'
+
+    return trusted_ip
+
+
+def get_common_request_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')
     if x_forwarded_for and x_forwarded_for[0]:
         login_ip = x_forwarded_for[0]
+        if login_ip.count(':') == 1:
+            # format: ipv4:port (非标准格式的 X-Forwarded-For)
+            login_ip = login_ip.split(":")[0]
     else:
         login_ip = request.META.get('REMOTE_ADDR', '')
     return login_ip
+
+
+def get_request_ip_or_data(request):
+    ip = ''
+
+    if hasattr(request, 'data') and isinstance(request.data, dict) and request.data.get('remote_addr', ''):
+        permission = ServiceAccountSignaturePermission()
+        if permission.has_permission(request, None):
+            ip = request.data.get('remote_addr', '')
+    ip = ip or get_request_ip(request)
+    return ip
+
+
+def get_request_user_agent(request):
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    return user_agent
 
 
 def validate_ip(ip):
@@ -173,123 +248,272 @@ def with_cache(func):
         res = func(*args, **kwargs)
         cache[key] = res
         return res
+
     return wrapper
 
 
-class LocalProxy(object):
+logger = get_logger(__name__)
 
+
+def timeit(func):
+    def wrapper(*args, **kwargs):
+        name = func
+        for attr in ('__qualname__', '__name__'):
+            if hasattr(func, attr):
+                name = getattr(func, attr)
+                break
+
+        logger.debug("Start call: {}".format(name))
+        now = time.time()
+        result = func(*args, **kwargs)
+        using = (time.time() - now) * 1000
+        msg = "Ends  call: {}, using: {:.1f}ms".format(name, using)
+        logger.debug(msg)
+        return result
+
+    return wrapper
+
+
+def group_obj_by_count(objs, count=50):
+    objs_grouped = [
+        objs[i:i + count] for i in range(0, len(objs), count)
+    ]
+    return objs_grouped
+
+
+def dict_get_any(d, keys):
+    for key in keys:
+        value = d.get(key)
+        if value:
+            return value
+    return None
+
+
+# class lazyproperty:
+#     def __init__(self, func):
+#         self.func = func
+
+#     def __get__(self, instance, cls):
+#         if instance is None:
+#             return self
+#         else:
+#             value = self.func(instance)
+#             setattr(instance, self.func.__name__, value)
+#             return value
+
+lazyproperty = cached_property
+
+
+def get_disk_usage(path):
+    return psutil.disk_usage(path=path).percent
+
+
+def get_cpu_load():
+    cpu_load_1, cpu_load_5, cpu_load_15 = psutil.getloadavg()
+    cpu_count = psutil.cpu_count()
+    single_cpu_load_1 = cpu_load_1 / cpu_count
+    single_cpu_load_1 = '%.2f' % single_cpu_load_1
+    return float(single_cpu_load_1)
+
+
+def get_docker_mem_usage_if_limit():
+    try:
+        with open('/sys/fs/cgroup/memory/memory.limit_in_bytes') as f:
+            limit_in_bytes = int(f.readline())
+            total = psutil.virtual_memory().total
+            if limit_in_bytes >= total:
+                raise ValueError('Not limit')
+
+        with open('/sys/fs/cgroup/memory/memory.usage_in_bytes') as f:
+            usage_in_bytes = int(f.readline())
+
+        with open('/sys/fs/cgroup/memory/memory.stat') as f:
+            inactive_file = 0
+            for line in f:
+                if line.startswith('total_inactive_file'):
+                    name, inactive_file = line.split()
+                    break
+
+                if line.startswith('inactive_file'):
+                    name, inactive_file = line.split()
+                    continue
+
+            inactive_file = int(inactive_file)
+        return ((usage_in_bytes - inactive_file) / limit_in_bytes) * 100
+
+    except Exception:
+        return None
+
+
+def get_memory_usage():
+    usage = get_docker_mem_usage_if_limit()
+    if usage is not None:
+        return usage
+    return psutil.virtual_memory().percent
+
+
+class Time:
+    def __init__(self):
+        self._timestamps = []
+        self._msgs = []
+
+    def begin(self):
+        self._timestamps.append(time.time())
+
+    def time(self, msg):
+        self._timestamps.append(time.time())
+        self._msgs.append(msg)
+
+    def print(self):
+        last, *timestamps = self._timestamps
+        for timestamp, msg in zip(timestamps, self._msgs):
+            logger.debug(f'TIME_IT: {msg} {timestamp - last}')
+            last = timestamp
+
+
+def bulk_get(d, keys, default=None):
+    values = []
+    for key in keys:
+        values.append(d.get(key, default))
+    return values
+
+
+def unique(objects, key=None):
+    seen = OrderedDict()
+
+    if key is None:
+        key = lambda item: item
+
+    for obj in objects:
+        v = key(obj)
+        if v not in seen:
+            seen[v] = obj
+    return list(seen.values())
+
+
+def get_file_by_arch(dir, filename):
+    platform_name = platform.system()
+    arch = platform.machine()
+
+    file_path = os.path.join(
+        settings.BASE_DIR, dir, platform_name, arch, filename
+    )
+    return file_path
+
+
+def pretty_string(data, max_length=128, ellipsis_str='...'):
     """
-    Copy from werkzeug.local.LocalProxy
+    params:
+       data: abcdefgh
+       max_length: 7
+       ellipsis_str: ...
+   return:
+       ab...gh
     """
-    __slots__ = ('__local', '__dict__', '__name__', '__wrapped__')
+    data = str(data)
+    if len(data) < max_length:
+        return data
+    remain_length = max_length - len(ellipsis_str)
+    half = remain_length // 2
+    if half <= 1:
+        return data[:max_length]
+    start = data[:half]
+    end = data[-half:]
+    data = f'{start}{ellipsis_str}{end}'
+    return data
 
-    def __init__(self, local, name=None):
-        object.__setattr__(self, '_LocalProxy__local', local)
-        object.__setattr__(self, '__name__', name)
-        if callable(local) and not hasattr(local, '__release_local__'):
-            # "local" is a callable that is not an instance of Local or
-            # LocalManager: mark it as a wrapped function.
-            object.__setattr__(self, '__wrapped__', local)
 
-    def _get_current_object(self):
-        """Return the current object.  This is useful if you want the real
-        object behind the proxy at a time for performance reasons or because
-        you want to pass the object into a different context.
-        """
-        if not hasattr(self.__local, '__release_local__'):
-            return self.__local()
-        try:
-            return getattr(self.__local, self.__name__)
-        except AttributeError:
-            raise RuntimeError('no object bound to %s' % self.__name__)
+def group_by_count(it, count):
+    return [it[i:i + count] for i in range(0, len(it), count)]
 
-    @property
-    def __dict__(self):
-        try:
-            return self._get_current_object().__dict__
-        except RuntimeError:
-            raise AttributeError('__dict__')
 
-    def __repr__(self):
-        try:
-            obj = self._get_current_object()
-        except RuntimeError:
-            return '<%s unbound>' % self.__class__.__name__
-        return repr(obj)
+def test_ip_connectivity(host, port, timeout=0.5):
+    """
+    timeout: seconds
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    result = sock.connect_ex((host, int(port)))
+    sock.close()
+    if result == 0:
+        connectivity = True
+    else:
+        connectivity = False
+    return connectivity
 
-    def __bool__(self):
-        try:
-            return bool(self._get_current_object())
-        except RuntimeError:
-            return False
 
-    def __dir__(self):
-        try:
-            return dir(self._get_current_object())
-        except RuntimeError:
-            return []
+def static_or_direct(logo_path):
+    if logo_path.startswith('img/'):
+        return static(logo_path)
+    else:
+        return logo_path
 
-    def __getattr__(self, name):
-        if name == '__members__':
-            return dir(self._get_current_object())
-        return getattr(self._get_current_object(), name)
 
-    def __setitem__(self, key, value):
-        self._get_current_object()[key] = value
+def make_dirs(name, mode=0o755, exist_ok=False):
+    """ 默认权限设置为 0o755 """
+    return os.makedirs(name, mode=mode, exist_ok=exist_ok)
 
-    def __delitem__(self, key):
-        del self._get_current_object()[key]
 
-    __setattr__ = lambda x, n, v: setattr(x._get_current_object(), n, v)
-    __delattr__ = lambda x, n: delattr(x._get_current_object(), n)
-    __str__ = lambda x: str(x._get_current_object())
-    __lt__ = lambda x, o: x._get_current_object() < o
-    __le__ = lambda x, o: x._get_current_object() <= o
-    __eq__ = lambda x, o: x._get_current_object() == o
-    __ne__ = lambda x, o: x._get_current_object() != o
-    __gt__ = lambda x, o: x._get_current_object() > o
-    __ge__ = lambda x, o: x._get_current_object() >= o
-    __cmp__ = lambda x, o: cmp(x._get_current_object(), o)  # noqa
-    __hash__ = lambda x: hash(x._get_current_object())
-    __call__ = lambda x, *a, **kw: x._get_current_object()(*a, **kw)
-    __len__ = lambda x: len(x._get_current_object())
-    __getitem__ = lambda x, i: x._get_current_object()[i]
-    __iter__ = lambda x: iter(x._get_current_object())
-    __contains__ = lambda x, i: i in x._get_current_object()
-    __add__ = lambda x, o: x._get_current_object() + o
-    __sub__ = lambda x, o: x._get_current_object() - o
-    __mul__ = lambda x, o: x._get_current_object() * o
-    __floordiv__ = lambda x, o: x._get_current_object() // o
-    __mod__ = lambda x, o: x._get_current_object() % o
-    __divmod__ = lambda x, o: x._get_current_object().__divmod__(o)
-    __pow__ = lambda x, o: x._get_current_object() ** o
-    __lshift__ = lambda x, o: x._get_current_object() << o
-    __rshift__ = lambda x, o: x._get_current_object() >> o
-    __and__ = lambda x, o: x._get_current_object() & o
-    __xor__ = lambda x, o: x._get_current_object() ^ o
-    __or__ = lambda x, o: x._get_current_object() | o
-    __div__ = lambda x, o: x._get_current_object().__div__(o)
-    __truediv__ = lambda x, o: x._get_current_object().__truediv__(o)
-    __neg__ = lambda x: -(x._get_current_object())
-    __pos__ = lambda x: +(x._get_current_object())
-    __abs__ = lambda x: abs(x._get_current_object())
-    __invert__ = lambda x: ~(x._get_current_object())
-    __complex__ = lambda x: complex(x._get_current_object())
-    __int__ = lambda x: int(x._get_current_object())
-    __float__ = lambda x: float(x._get_current_object())
-    __oct__ = lambda x: oct(x._get_current_object())
-    __hex__ = lambda x: hex(x._get_current_object())
-    __index__ = lambda x: x._get_current_object().__index__()
-    __coerce__ = lambda x, o: x._get_current_object().__coerce__(x, o)
-    __enter__ = lambda x: x._get_current_object().__enter__()
-    __exit__ = lambda x, *a, **kw: x._get_current_object().__exit__(*a, **kw)
-    __radd__ = lambda x, o: o + x._get_current_object()
-    __rsub__ = lambda x, o: o - x._get_current_object()
-    __rmul__ = lambda x, o: o * x._get_current_object()
-    __rdiv__ = lambda x, o: o / x._get_current_object()
-    __rtruediv__ = __rdiv__
-    __rfloordiv__ = lambda x, o: o // x._get_current_object()
-    __rmod__ = lambda x, o: o % x._get_current_object()
-    __rdivmod__ = lambda x, o: x._get_current_object().__rdivmod__(o)
-    __copy__ = lambda x: copy.copy(x._get_current_object())
-    __deepcopy__ = lambda x, memo: copy.deepcopy(x._get_current_object(), memo)
+def distinct(seq, key=None):
+    if key is None:
+        # 如果未提供关键字参数，则默认使用元素本身作为比较键
+        key = lambda x: x
+    seen = set()
+    result = []
+    for item in seq:
+        k = key(item)
+        if k not in seen:
+            seen.add(k)
+            result.append(item)
+    return result
+
+
+def is_macos():
+    return platform.system() == 'Darwin'
+
+
+def convert_html_to_markdown(html_str, **options):
+    markdown = markdownify(html_str, **options)
+    markdown = markdown.replace('\n\n', '\n')
+    markdown = markdown.replace('\n ', '\n')
+    return markdown
+
+
+def convert_html_to_text(html_str, body_width=90):
+    soup = BeautifulSoup(html_str or '', 'html.parser')
+
+    for tag in soup(['script', 'style']):
+        tag.decompose()
+
+    text = soup.get_text(separator='\n', strip=True)
+    text = text.replace('\xa0', ' ')
+    lines = [line.strip() for line in text.splitlines()]
+
+    wrapped_lines = []
+    for line in lines:
+        if not line:
+            if wrapped_lines and wrapped_lines[-1] != '':
+                wrapped_lines.append('')
+            continue
+        wrapped = textwrap.fill(line, width=body_width) if body_width else line
+        wrapped_lines.append(wrapped)
+
+    return '\n'.join(wrapped_lines).strip()
+
+
+def many_get(d, keys, default=None):
+    res = [d.get(key, default) for key in keys]
+    return res
+
+
+def text_hmac_sha256(text: str, secret_key: str = None):
+    if secret_key is None:
+        secret_key = settings.SECRET_KEY
+    try:
+        msg = text.strip().lower().encode('utf-8')
+        key = secret_key.encode("utf-8")
+        digest = hmac.new(key, msg, hashlib.sha256).hexdigest()  # 64位十六进制字符串
+    except Exception as e:
+        logger.error(f"Failed to hmac hash text: {text}, error: {e}")
+        digest = ''
+    return digest
